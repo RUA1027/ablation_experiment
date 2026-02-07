@@ -123,7 +123,7 @@ training:
     optics: 1.0                  # 像差网络梯度裁剪阈值
                                  # 设置更小的阈值（1.0）是为了强制让物理参数的更新更加“温和”和“稳健”
   # 梯度累积
-  accumulation_steps: 1          # 梯度累积步数，模拟更大的 Batch Size
+  accumulation_steps: 2          # 梯度累积步数，模拟更大的 Batch Size
 
   # 三阶段训练计划 (Stage 1/2/3)
   # 总计 300 Epochs: 50 + 200 + 50
@@ -144,7 +144,7 @@ data:
   # 原始图像尺寸: 1680 x 1120 像素
   data_root: "./data/dd_dp_dataset_png"
 
-  batch_size: 16                 # 批大小 (由于图像较大，建议 2-4)
+  batch_size: 8                 # 批大小 (由于图像较大，建议 2-4)
   image_height: 1120             # 原始图像高度
   image_width: 1680              # 原始图像宽度
   crop_size: 512                 # 训练时随机裁剪尺寸 (节省显存)
@@ -180,11 +180,11 @@ visualization:
 # 实验配置 (Experiment)
 # -----------------------------------------------------------------------------
 experiment:
-  name: "dpdd_physics_driven"    # 实验名称
+  name: "dpdd_physics_ablation"    # 实验名称
   seed: 42                       # 随机种子
   device: "cuda"                 # 计算设备: "cuda" 或 "cpu"
   use_physical_layer: false       # 是否启用物理层
-  epochs: 300                    # 训练轮数 (= stage1 + stage2 + stage3 = 5+200+50)
+  epochs: 200                    # 训练轮数 (= stage1 + stage2 + stage3 = 5+200+50)
   save_interval: 3               # 定期存档间隔 (epochs) - 修改为更频繁，防止意外丢失
   log_interval: 1                # 日志间隔 (epochs)
   output_dir: "/root/autodl-nas/Defocus_with_NewBP/experiments"  # 输出目录 (AutoDL 网盘)
