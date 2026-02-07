@@ -1,3 +1,9 @@
 data/
 *.pth
 __pycache__/
+data/
+*.pth
+*.pt
+__pycache__/
+checkpoints/
+logs/
