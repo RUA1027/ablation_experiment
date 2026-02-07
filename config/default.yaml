@@ -183,7 +183,7 @@ experiment:
   name: "dpdd_physics_driven"    # 实验名称
   seed: 42                       # 随机种子
   device: "cuda"                 # 计算设备: "cuda" 或 "cpu"
-  use_physical_layer: true       # 是否启用物理层
+  use_physical_layer: false       # 是否启用物理层
   epochs: 300                    # 训练轮数 (= stage1 + stage2 + stage3 = 5+200+50)
   save_interval: 3               # 定期存档间隔 (epochs) - 修改为更频繁，防止意外丢失
   log_interval: 1                # 日志间隔 (epochs)
