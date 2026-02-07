@@ -1,0 +1,50 @@
+Loading config from config/default.yaml...
+✓ 配置已加载: config/default.yaml
+Device: cuda
+Seed: 42
+Output directory: /root/autodl-nas/Defocus_with_NewBP/experiments/dpdd_physics_driven_20260204_172243
+
+============================================================
+Initializing DataLoaders...
+============================================================
+[DPDDDataset] Mode: train, Real samples: 350, Repeat factor: 100, Virtual length: 35000
+[DPDDDataset] Mode: val, Real samples: 74, Repeat factor: 1, Virtual length: 74
+✓ Train set: 350 real images, virtual length: 35000
+✓ Val set size: 74
+✓ Batch size: 2
+✓ Crop size (train): 512
+✓ Center crop size (val): 1024
+
+============================================================
+Building Models...
+============================================================
+  ├─ 像差网络: AberrationNet (hidden_dim=256)
+  ├─ 复原网络: RestorationNet (base_filters=32, use_coords=True)
+  └─ 物理层: OLA (patch=64, stride=32, algo=NewBP)
+
+Initializing Trainer...
+
+训练计划:
+  Stage 1 (Physics Only):        Epochs 1-50
+  Stage 2 (Restoration):         Epochs 51-250
+  Stage 3 (Joint, LR halved):    Epochs 251-300
+  Total: 300 epochs
+
+============================================================
+Start Training
+============================================================
+Setting up [LPIPS] perceptual loss: trunk [alex], v[0.1], spatial [off]
+Loading model from: /root/miniconda3/envs/defocus/lib/python3.10/site-packages/lpips/weights/v0.1/alex.pth
+
+============================================================
+Epoch 1/300 - Stage 1: Physics Only (物理层训练)
+============================================================
+  Train Loss: 0.007912 (Data: 0.007504, Sup: 0.000000)
+  Evaluating on validation set...
+| Metric         |    Value |
+|----------------|----------|
+| Reblur_MSE     | 0.006721 |
+| PSF_Smoothness | 1.6e-05  |
+  ✓ New best Stage 1 model saved: Reblur_MSE=0.006721
+
+Epoch 2/300 [physics_only]

@@ -1,0 +1,221 @@
+# =============================================================================
+# 物理驱动盲去卷积网络 - 默认配置文件
+# Physics-Driven Blind Deconvolution Network - Default Configuration
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 物理光学参数 (Physics / Optics)
+# -----------------------------------------------------------------------------
+physics:
+  # Zernike 多项式相关
+  n_modes: 15                    # Zernike 模式数量 (Noll 1-15 -> 21)
+  pupil_size: 64                # 光瞳计算网格大小 (128 for High Res)
+  kernel_size: 31                # PSF 卷积核大小 (65 for Large PSF)
+  oversample_factor: 2           # FFT 过采样因子
+  
+  # 波长配置 (单位: 米)
+  ref_wavelength: 550.0e-9       # 参考波长 (绿光)
+  wavelengths:                   # RGB 波长列表
+    - 620.0e-9                   # 红光
+    - 550.0e-9                   # 绿光
+    - 450.0e-9                   # 蓝光
+
+# -----------------------------------------------------------------------------
+# 空间变化卷积层 (OLA - Overlap-Add)
+# -----------------------------------------------------------------------------
+ola:
+  patch_size: 64                 # 补丁大小
+  stride: 32                     # 补丁步长 (50% 重叠)
+  pad_to_power_2: true           # FFT 是否填充到 2 的幂
+  use_newbp: false                # 是否启用 NewBP 算法 (非对角雅可比)
+
+# -----------------------------------------------------------------------------
+# 像差预测网络 (Aberration Network)
+# -----------------------------------------------------------------------------
+aberration_net:
+  # 通用参数
+  n_coeffs: 15                   # 输出 Zernike 系数数量 (与 physics.n_modes 保持一致)
+  a_max: 1.5                     # 系数约束范围 [-a_max, a_max]
+  
+  # 网络类型: "polynomial" 或 "mlp"
+  type: "mlp"
+  
+  # PolynomialAberrationNet 专用参数
+  polynomial:
+    degree: 2                    # 多项式阶数 (2 阶 = 6 项)
+  
+  # AberrationNet (MLP) 专用参数
+  # 输入坐标 (x,y)->傅里叶特征编码->4层全连接网络->Tanh 物理约束->Zernike 系数
+  mlp:
+    hidden_dim: 256              # 隐层维度
+    use_fourier: true            # 是否使用傅里叶特征编码
+    # 将 2 维坐标映射到高维空间,用 Fourier Encoding 解决坐标输入的频谱缺陷.
+    fourier_scale: 5             # 傅里叶特征缩放因子
+    a_max_mlp: 1.5               # MLP 版本的系数范围 (通常比 polynomial 更大)
+
+# Polynomial (多项式)：它无法表达局部的突变。它会试图用一条平滑曲线去拟合局部瑕疵，结果就是“平均化”了错误，导致整体都不准确。
+# MLP (神经网络)：由于它具有拟合任意函数的能力（Universal Approximation Theorem），可以更好地捕捉局部的复杂变化，从而提高像差预测的精度。
+
+# -----------------------------------------------------------------------------
+# 图像复原网络 (Restoration Network - U-Net)
+# -----------------------------------------------------------------------------
+restoration_net:
+  n_channels: 3                  # 输入通道数 (RGB)
+  n_classes: 3                   # 输出通道数 (RGB)
+  base_filters: 32               # 基础滤波器数量
+  bilinear: true                 # 上采样方式: true=双线性插值, false=转置卷积
+  use_coords: true               # 是否启用坐标注入 (CoordConv)
+  
+  # U-Net 架构配置 (通道倍数)
+  channel_multipliers:
+    - 1                          # Inc:   base_filters × 1 = 32
+    - 2                          # Down1: base_filters × 2 = 64
+    - 4                          # Down2: base_filters × 4 = 128
+    - 8                          # Down3: base_filters × 8 = 256
+    - 8                          # Down4: base_filters × 8 = 256 (瓶颈)
+# -----------------------------------------------------------------------------
+# 训练配置 (Training)
+# -----------------------------------------------------------------------------
+training:
+  # 优化器
+  optimizer:
+    type: "adamw"                # 优化器类型
+    lr_restoration: 1.0e-4       # 复原网络学习率
+    lr_optics: 1.0e-5            # 像差网络学习率
+    weight_decay: 0.01           # 权重衰减
+  
+  # CONFIG_FIX: 添加兼容旧配置的损失函数默认权重 (已被 stage_weights 取代，但保留以向后兼容)
+  loss:
+    lambda_sup: 1.0              # 监督损失权重 (默认值，实际由 stage_weights 覆盖)
+    lambda_coeff: 0.05           # 系数正则权重
+    lambda_smooth: 0.1           # 平滑正则权重
+    lambda_image_reg: 0.001      # 图像 TV 正则权重
+  
+  # 三阶段损失权重配置 (Stage Weights)
+  # 这里定义每个阶段具体的权重组合
+  stage_weights:
+    physics_only:                   # 第一阶段：专攻物理
+      w_data: 1.0
+      w_sup: 0.0                    # 没复原，不需要监督
+      w_smooth: 0.1                 # 需要较强平滑约束
+      w_coeff: 0.05                 # 需要限制系数大小
+      w_img_reg: 0.0
+    
+    restoration_fixed_physics:      # 第二阶段：物理当裁判，练复原
+      w_data: 0.1                   # 物理自监督辅助
+      w_sup: 1.0                    # 强监督为主
+      w_smooth: 0.0                 # 物理层冻结，不需要约束系数
+      w_coeff: 0.0
+      w_img_reg: 0.001              # 复原图像加点全变分正则
+      
+    joint:                          # 第三阶段：一起微调
+      w_data: 0.5
+      w_sup: 1.0
+      w_smooth: 0.05
+      w_coeff: 0.01
+      w_img_reg: 0.0001
+  
+  # 梯度裁剪
+  gradient_clip:
+
+    restoration: 5.0             # 复原网络梯度裁剪阈值
+                                 # 允许网络有较大的学习步长来捕捉图像的细节和纹理，同时防止在处理极端模糊的区域时产生异常巨大的震荡。
+    optics: 1.0                  # 像差网络梯度裁剪阈值
+                                 # 设置更小的阈值（1.0）是为了强制让物理参数的更新更加“温和”和“稳健”
+  # 梯度累积
+  accumulation_steps: 1          # 梯度累积步数，模拟更大的 Batch Size
+
+  # 三阶段训练计划 (Stage 1/2/3)
+  # 总计 300 Epochs: 50 + 200 + 50
+  stage_schedule:
+    stage1_epochs: 50              # Stage 1: Physics Only (物理层单独训练)
+    stage2_epochs: 200            # Stage 2: Restoration with Fixed Physics (复原网络训练)
+    stage3_epochs: 50             # Stage 3: Joint Fine-tuning (联合微调，学习率减半)
+  
+  # 正则化采样
+  smoothness_grid_size: 16       # TV 损失计算的网格大小
+
+# -----------------------------------------------------------------------------
+# 数据配置 (Data)
+# -----------------------------------------------------------------------------
+data:
+  # 数据集根路径 (直接指向原始 DPDD 数据集，包含 train_c/val_c/test_c)
+  # DPDD Canon Set: train_c=350对, val_c=74对, test_c=76对
+  # 原始图像尺寸: 1680 x 1120 像素
+  data_root: "./data/dd_dp_dataset_png"
+
+  batch_size: 16                 # 批大小 (由于图像较大，建议 2-4)
+  image_height: 1120             # 原始图像高度
+  image_width: 1680              # 原始图像宽度
+  crop_size: 512                 # 训练时随机裁剪尺寸 (节省显存)
+  val_crop_size: 1024            # 验证集中心裁剪尺寸
+  num_workers: 8                 # 数据加载线程数
+  
+  # 虚拟长度机制: 每张图在一个 Epoch 内被随机裁剪的次数
+  # 训练集: 350 * 100 = 35000 次采样/epoch
+  repeat_factor: 100
+  
+  # 数据增强
+  augmentation:
+    random_flip: true            # 开启随机水平/垂直翻转
+
+# -----------------------------------------------------------------------------
+# 可视化配置 (Visualization)
+# -----------------------------------------------------------------------------
+visualization:
+  # PSF 网格可视化
+  psf_grid:
+    rows: 5                      # 采样行数
+    cols: 5                      # 采样列数
+    coord_range: [-0.9, 0.9]     # 采样坐标范围
+    colormap: "inferno"          # 颜色映射
+  
+  # 系数分布可视化
+  coeff_maps:
+    grid_size: 128               # 采样密度
+    indices: [3, 4, 5, 6]        # 显示的 Zernike 索引 (Noll 4-7)
+    colormap: "viridis"          # 颜色映射
+
+# -----------------------------------------------------------------------------
+# 实验配置 (Experiment)
+# -----------------------------------------------------------------------------
+experiment:
+  name: "dpdd_physics_driven"    # 实验名称
+  seed: 42                       # 随机种子
+  device: "cuda"                 # 计算设备: "cuda" 或 "cpu"
+  use_physical_layer: true       # 是否启用物理层
+  epochs: 300                    # 训练轮数 (= stage1 + stage2 + stage3 = 5+200+50)
+  save_interval: 3               # 定期存档间隔 (epochs) - 修改为更频繁，防止意外丢失
+  log_interval: 1                # 日志间隔 (epochs)
+  output_dir: "/root/autodl-nas/Defocus_with_NewBP/experiments"  # 输出目录 (AutoDL 网盘)
+  run_name: ""                   # 可选: 固定实验目录名 (留空则使用 name)
+  use_timestamp: true            # 是否追加时间戳
+  timestamp_format: "%m%d_%H%M"  # 时间戳格式
+  checkpoints_subdir: "checkpoints"  # checkpoint 子目录
+  
+  # TensorBoard 配置
+  tensorboard:
+    enabled: true                # 是否启用 TensorBoard
+    log_dir: "runs"              # TensorBoard 日志目录 (相对路径: 输出目录下)
+    append_run_name: false       # 是否追加 run_name 子目录
+    log_images: true             # 是否记录图像
+    image_log_interval: 10       # 图像记录间隔 (epochs)
+
+# -----------------------------------------------------------------------------
+# 模型保存策略 (Checkpoint Strategy)
+# -----------------------------------------------------------------------------
+checkpoint:
+  # 各阶段最佳模型保存 (不会被覆盖)
+  save_best_per_stage: true
+  
+  # 验证指标选择
+  stage1_metric: "reblur_mse"    # Stage 1: 重模糊一致性误差 (越低越好)
+  stage2_metric: "psnr"          # Stage 2: PSNR (越高越好)
+  stage3_metric: "combined"      # Stage 3: 综合指标 (PSNR + 物理约束)
+  
+  # 熔断机制阈值
+  circuit_breaker:
+    enabled: false
+    stage1_min_loss: 0.005         # Stage 1 验证 Reblur MSE 需低于此值才能进入 Stage 2
+    stage2_min_psnr: 30.0        # Stage 2 验证 PSNR 需高于此值才能进入 Stage 3
+    stage2_min_ssim: 0.95         # Stage 2 验证 SSIM 需高于此值才能进入 Stage 3
