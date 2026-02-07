@@ -89,7 +89,7 @@ training:
     lambda_sup: 1.0              # 监督损失权重 (默认值，实际由 stage_weights 覆盖)
     lambda_coeff: 0.05           # 系数正则权重
     lambda_smooth: 0.1           # 平滑正则权重
-    lambda_image_reg: 0.001      # 图像 TV 正则权重
+    lambda_image_reg: 0.0      # 图像 TV 正则权重
   
   # 三阶段损失权重配置 (Stage Weights)
   # 这里定义每个阶段具体的权重组合
@@ -106,14 +106,14 @@ training:
       w_sup: 1.0                    # 强监督为主
       w_smooth: 0.0                 # 物理层冻结，不需要约束系数
       w_coeff: 0.0
-      w_img_reg: 0.001              # 复原图像加点全变分正则
+      w_img_reg: 0.0             # 复原图像加点全变分正则
       
     joint:                          # 第三阶段：一起微调
       w_data: 0.5
       w_sup: 1.0
       w_smooth: 0.05
       w_coeff: 0.01
-      w_img_reg: 0.0001
+      w_img_reg: 0.0
   
   # 梯度裁剪
   gradient_clip:
@@ -185,9 +185,9 @@ experiment:
   device: "cuda"                 # 计算设备: "cuda" 或 "cpu"
   use_physical_layer: false       # 是否启用物理层
   epochs: 200                    # 训练轮数 (= stage1 + stage2 + stage3 = 5+200+50)
-  save_interval: 3               # 定期存档间隔 (epochs) - 修改为更频繁，防止意外丢失
+  save_interval: 5               # 定期存档间隔 (epochs) - 修改为更频繁，防止意外丢失
   log_interval: 1                # 日志间隔 (epochs)
-  output_dir: "/root/autodl-nas/Defocus_with_NewBP/experiments"  # 输出目录 (AutoDL 网盘)
+  output_dir: "/root/autodl-nas/Defocus_with_NewBP/experiments//ablation_baseline"  # 输出目录 (AutoDL 网盘)
   run_name: ""                   # 可选: 固定实验目录名 (留空则使用 name)
   use_timestamp: true            # 是否追加时间戳
   timestamp_format: "%m%d_%H%M"  # 时间戳格式
